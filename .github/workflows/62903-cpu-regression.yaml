@@ -1,0 +1,87 @@
+name: Issue 62903 CPU build and simulator regression
+on:
+  workflow_dispatch:
+  push:
+    branches: [issue-62903-ci]
+permissions:
+  contents: read
+concurrency:
+  group: issue-62903-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 2G
+      TAR_OPTIONS: --no-same-owner
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          submodules: recursive
+          fetch-depth: 500
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: '3.10'
+      - uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25
+        id: cache
+        with:
+          path: |
+            .cpmcache
+            .ccache
+          key: ${{ runner.os }}-62903-clang20-py310-${{ hashFiles('cmake/**', 'tt_metal/sfpi-info.sh', '.github/workflows/62903-cpu-regression.yaml') }}-${{ github.sha }}-${{ github.run_attempt }}
+          restore-keys: |
+            ${{ runner.os }}-62903-clang20-py310-${{ hashFiles('cmake/**', 'tt_metal/sfpi-info.sh', '.github/workflows/62903-cpu-regression.yaml') }}-
+      - name: Install supported build dependencies (no device driver)
+        run: |
+          sudo ./install_dependencies.sh --docker
+          sudo apt-get update
+          sudo apt-get install -y ccache
+          python -m pip install cmake==3.31.6 ninja==1.11.1.4
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.7.1+cpu
+          python -m pip install -r .github/scripts/62903-requirements.lock
+      - name: Configure and build complete TTNN module
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          ./build_metal.sh --build-dir build_62903_ci --build-type Release --disable-profiler --enable-ccache --configure-only 2>&1 | tee artifacts/configure.log
+          cmake -S . -B build_62903_ci -DTT_UMD_BUILD_SIMULATION=ON 2>&1 | tee -a artifacts/configure.log
+          cmake --build build_62903_ci --target ttnn --parallel 2 2>&1 | tee artifacts/build.log
+          git rev-parse HEAD > artifacts/source-sha.txt
+          ccache --show-stats > artifacts/ccache-stats.txt
+      - name: Wormhole simulator
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python .github/scripts/verify_62903_native.py --arch wormhole_b0 2>&1 | tee artifacts/wormhole.log
+      - name: Blackhole simulator
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python .github/scripts/verify_62903_native.py --arch blackhole 2>&1 | tee artifacts/blackhole.log
+      - name: Save completed compilation cache, including failed runs
+        if: ${{ always() && steps.cache.outputs.cache-primary-key != '' && steps.cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          path: |
+            .cpmcache
+            .ccache
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+      - name: Save evidence and compiled libraries
+        if: ${{ always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: issue-62903-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            artifacts/
+            build_62903_ci/**/*.so*
