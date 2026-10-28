@@ -479,7 +479,8 @@ void validate_matmul_bias_shape(
 
 // Untilize Output: untilize_out means "give me row-major output." Allowed only with an
 // explicit BF16/FP32 output dtype on the Mcast1D config; this check runs for every
-// config so it can reject untilize_out on every other config.
+// config so it can reject untilize_out on every other config. Only sharded output
+// binds the untilized CB directly to the output; the interleaved writer still writes tiles.
 void validate_matmul_untilize_out(
     const MatmulParams& attributes, const operations::matmul::MatmulProgramConfig& chosen_program_config) {
     if (!attributes.untilize_out) {
@@ -500,6 +501,11 @@ void validate_matmul_untilize_out(
         std::holds_alternative<operations::matmul::MatmulMultiCoreReuseMultiCast1DProgramConfig>(chosen_program_config),
         "{}: untilize_out is not supported for this program config, only supported for "
         "MatmulMultiCoreReuseMultiCast1DProgramConfig",
+        config_name);
+    TT_FATAL(
+        attributes.output_mem_config.is_sharded(),
+        "{}: untilize_out requires sharded output; interleaved output is not supported. "
+        "Use sharded output or set untilize_out=false and convert the result with to_layout.",
         config_name);
 }
 
