@@ -1,0 +1,17 @@
+{
+  "wormhole_b0": [
+    "tests/ttnn/unit_tests/operations/eltwise/test_preallocated_output_layout.py",
+    "tests/ttnn/unit_tests/operations/matmul/test_preallocated_output_layout.py",
+    "tests/ttnn/unit_tests/operations/eltwise/test_binary_dtype_validation.py::test_binary_rejects_row_major_output_for_tile_inputs",
+    "tests/ttnn/unit_tests/operations/matmul/test_linear.py::test_matmul_rejects_row_major_optional_output",
+    "tests/ttnn/unit_tests/operations/matmul/test_matmul.py::test_optional_output_shape_must_match",
+    "tests/ttnn/unit_tests/operations/matmul/test_matmul.py::test_linear_broadcast_bias_into_optional_output",
+    "tests/ttnn/unit_tests/operations/matmul/test_matmul.py::test_matmul_fp32_crossblock_reload_untilize_precision",
+    "tests/ttnn/unit_tests/operations/matmul/test_matmul_program_cache.py::test_matmul_cache_reuse_same_config",
+    "tests/ttnn/unit_tests/operations/eltwise/test_binary_ng_program_cache.py::test_ng_inplace_cache_reuse_different_shapes"
+  ],
+  "blackhole": [
+    "tests/ttnn/unit_tests/operations/eltwise/test_preallocated_output_layout.py",
+    "tests/ttnn/unit_tests/operations/matmul/test_preallocated_output_layout.py"
+  ]
+}
