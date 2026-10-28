@@ -5064,10 +5064,6 @@ def test_matmul_fp32_crossblock_reload_precision(device, factory, packer_l1_acc,
     )
 
 
-@pytest.mark.xfail(
-    reason=("Fused matmul untilize_out loses fp32 precision. Issue #49836"),
-    strict=True,
-)
 @pytest.mark.parametrize("packer_l1_acc", [False, True])
 def test_matmul_fp32_crossblock_reload_untilize_precision(device, packer_l1_acc):
     """fp32 accumulation precision with untilize_out=True, where the untilize/reblock stage is a
@@ -5106,12 +5102,15 @@ def test_matmul_fp32_crossblock_reload_untilize_precision(device, packer_l1_acc)
     b_t = ttnn.from_torch(
         b, layout=ttnn.TILE_LAYOUT, device=device, dtype=ttnn.bfloat16, memory_config=ttnn.DRAM_MEMORY_CONFIG
     )
+    # Keep this precision regression on the supported untilize path. Interleaved
+    # untilize is rejected before execution rather than failing for an unrelated reason.
+    output_memory_config = ttnn.create_sharded_memory_config((m, n), ttnn.CoreGrid(y=1, x=1), ttnn.ShardStrategy.WIDTH)
     out = ttnn.matmul(
         a_t,
         b_t,
         program_config=program_config,
         compute_kernel_config=compute_kernel_config,
-        memory_config=ttnn.DRAM_MEMORY_CONFIG,
+        memory_config=output_memory_config,
     )
     out = ttnn.to_torch(out).float().reshape(m, n)
 
