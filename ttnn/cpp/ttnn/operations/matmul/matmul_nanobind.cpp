@@ -511,7 +511,9 @@ void py_module(nb::module_& mod) {
 
             When true, the output is converted from tiled layout to row-major layout during
             the operation. This can be useful when the subsequent operation expects row-major
-            data and can eliminate a separate untilization pass. Defaults to false.
+            data and can eliminate a separate untilization pass. Requires sharded output;
+            interleaved output is not supported. For interleaved row-major output, leave
+            this false and convert the result with ttnn.to_layout. Defaults to false.
         )doc")
         .def_rw(
             "allowed_worker_cores",
