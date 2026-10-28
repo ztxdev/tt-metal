@@ -115,6 +115,9 @@ print(json.dumps({'package': ttnn.__file__, 'extension': str(pathlib.Path(ttnn._
         info["runtime_header_workarounds"] = [str(p.relative_to(repo)) for p in backups]
         (artifacts / ("manifest-" + args.arch + ".json")).write_text(json.dumps(info, indent=2) + "\n")
         selection = json.loads((repo / ".github/scripts/62903-selection.json").read_text())[args.arch]
+        # Root conftest.py appends a timestamp to JUnit filenames in GitHub Actions.
+        # Only accept a report created by this invocation, never a stale artifact.
+        reports_before = {p: digest(p) for p in artifacts.glob(args.arch + "*.xml")}
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "-xq", *selection, "--junitxml=" + str(artifacts / (args.arch + ".xml"))],
             cwd=repo,
@@ -124,7 +127,13 @@ print(json.dumps({'package': ttnn.__file__, 'extension': str(pathlib.Path(ttnn._
         for header, original in backups.items():
             header.write_bytes(original)
     if result.returncode == 0:
-        suites = ET.parse(artifacts / (args.arch + ".xml")).getroot().iter("testsuite")
+        reports = [
+            p for p in artifacts.glob(args.arch + "*.xml") if reports_before.get(p) != digest(p)
+        ]
+        if len(reports) != 1:
+            raise SystemExit("Expected exactly one fresh JUnit report: " + str(reports))
+        print("Validating JUnit report: " + str(reports[0]), flush=True)
+        suites = ET.parse(reports[0]).getroot().iter("testsuite")
         totals = {key: 0 for key in ["tests", "failures", "errors", "skipped"]}
         for suite in suites:
             for key in totals:
